@@ -19,7 +19,9 @@ def load_image(filename):
 
 
 def compute_sig(data):
-    return sd.significant_digits(data, reference=data.mean(axis=0), dtype=np.float32)
+    mask = np.std(data, axis=0) > 0
+    sig = sd.significant_digits(data, reference=data.mean(axis=0), dtype=np.float32)
+    return sig, mask
 
 
 def get_files(regexp):
@@ -30,13 +32,21 @@ def load_images(regexp):
     return np.array([load_image(f) for f in get_files(regexp)])
 
 
-def compute_sig_images(images):
-    return compute_sig(images)
-
-
-def save_image(img, filename):
+def save_image(img, dir, filename):
+    if not filename.endswith(".nii.gz"):
+        filename += ".nii.gz"
+    path = os.path.join(dir, filename)
     niimg = nibabel.Nifti1Image(img, np.eye(4))
-    nibabel.save(niimg, filename)
+    nibabel.save(niimg, path)
+
+
+def save_mask(img, dir, filename):
+    if not filename.endswith(".nii.gz"):
+        filename += ".nii.gz"
+    filename = filename.replace(".nii.gz", "_mask.nii.gz")
+    path = os.path.join(dir, filename)
+    niimg = nibabel.Nifti1Image(img, np.eye(4))
+    nibabel.save(niimg, path)
 
 
 def parse_args():
@@ -50,10 +60,16 @@ def parse_args():
         help="Path to the input image",
     )
     parser.add_argument(
+        "--output-directory",
+        type=str,
+        default=".",
+        help="Path to the output directory",
+    )
+    parser.add_argument(
         "--output",
         type=str,
         required=True,
-        help="Path to the output directory",
+        help="Output filename for the significant digits image",
     )
     return parser.parse_args()
 
@@ -61,13 +77,14 @@ def parse_args():
 def main():
     args = parse_args()
     img = load_images(args.input)
-    sig = compute_sig(img)
+    sig, mask = compute_sig(img)
 
     dirname = os.path.dirname(args.output)
     if dirname != "" and not os.path.exists(dirname):
         os.makedirs(dirname)
 
-    save_image(sig, args.output)
+    save_image(sig, args.output_dir, args.output)
+    save_mask(mask, args.output_dir, args.output)
 
 
 if __name__ == "__main__":
